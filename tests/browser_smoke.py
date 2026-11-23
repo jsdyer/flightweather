@@ -6,7 +6,7 @@ import shutil
 import json
 import tempfile
 import threading
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,10 +34,12 @@ def main():
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.goto(f"http://127.0.0.1:{server.server_port}/example-tool/")
-                page.locator("#airport-name").wait_for()
+                expect(page.locator("#airport-name")).to_have_text(default["label"])
                 assert int(page.locator("#airport-count").inner_text()) == len(data["airports"])
                 assert page.locator("#airport-name").inner_text() == default["label"]
-                assert default["icao"] in page.locator("#raw-observation").inner_text()
+                page.get_by_text("Read latest raw observation", exact=True).click()
+                expect(page.locator("#raw-observation")).to_be_visible()
+                expect(page.locator("#raw-observation")).to_contain_text(default["icao"])
                 assert "saved" in page.locator("#comparison-note").inner_text()
                 page.locator("#mode").select_option("reconstructed")
                 assert "Reconstructed" in page.locator("#comparison-note").inner_text()
@@ -47,7 +49,8 @@ def main():
                 assert page.locator(".airport-button").count() == 1
                 page.locator(".airport-button").click()
                 assert page.locator("#airport-name").inner_text() == alternative["label"]
-                assert alternative["icao"] in page.locator("#raw-observation").inner_text()
+                expect(page.locator("#raw-observation")).to_be_visible()
+                expect(page.locator("#raw-observation")).to_contain_text(alternative["icao"])
                 page.locator("#airport-search").fill("<img src=x onerror=alert(1)>")
                 assert "No airports match" in page.locator("#airports").inner_text()
                 assert page.locator("img").count() == 0
