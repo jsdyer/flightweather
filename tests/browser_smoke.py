@@ -1,8 +1,9 @@
-"""Exercise the built starter at a project subpath in Chromium."""
+"""Exercise retained reports and comparison controls at a project subpath in Chromium."""
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import shutil
+import json
 import tempfile
 import threading
 from playwright.sync_api import sync_playwright
@@ -16,6 +17,10 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    data = json.loads((ROOT / "dist/data/ledger.json").read_text())
+    cfg = json.loads((ROOT / "dist/config.json").read_text())
+    default = next(a for a in data["airports"] if a["icao"] == cfg["defaultAirport"])
+    alternative = next((a for a in data["airports"] if a["icao"] != default["icao"]), default)
     screenshots = ROOT / "browser-checks"
     screenshots.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory() as temporary:
@@ -29,22 +34,36 @@ def main():
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.goto(f"http://127.0.0.1:{server.server_port}/example-tool/")
-                page.locator("#sample").click()
-                assert page.locator("#output").input_value() == "Halifax\nLangley\nVancouver"
-                assert "1 duplicate removed" in page.locator("#status").inner_text()
-                page.locator("#input").fill('<img src=x onerror="alert(1)">\n<img src=x onerror="alert(1)">')
-                assert page.locator("#output").input_value() == '<img src=x onerror="alert(1)">'
+                page.locator("#airport-name").wait_for()
+                assert int(page.locator("#airport-count").inner_text()) == len(data["airports"])
+                assert page.locator("#airport-name").inner_text() == default["label"]
+                assert default["icao"] in page.locator("#raw-observation").inner_text()
+                assert "saved" in page.locator("#comparison-note").inner_text()
+                page.locator("#mode").select_option("reconstructed")
+                assert "Reconstructed" in page.locator("#comparison-note").inner_text()
+                assert page.locator("#comparison-rows tr").count() >= 1
+                assert page.locator("#chart svg").count() == 1
+                page.locator("#airport-search").fill(alternative["icao"])
+                assert page.locator(".airport-button").count() == 1
+                page.locator(".airport-button").click()
+                assert page.locator("#airport-name").inner_text() == alternative["label"]
+                assert alternative["icao"] in page.locator("#raw-observation").inner_text()
+                page.locator("#airport-search").fill("<img src=x onerror=alert(1)>")
+                assert "No airports match" in page.locator("#airports").inner_text()
                 assert page.locator("img").count() == 0
-                page.locator("#clear").click()
-                assert page.locator("#output").input_value() == ""
-                page.locator("#sample").click()
+                page.locator("#airport-search").fill("")
+                page.get_by_text("Add another airport", exact=True).click()
+                page.locator("#new-icao").fill("CYYZ")
+                page.locator("#new-label").fill("Toronto")
+                page.locator("#make-config").click()
+                assert '"icao": "CYYZ"' in page.locator("#config-entry").inner_text()
                 page.screenshot(path=str(screenshots / "desktop.png"), full_page=True)
                 page.set_viewport_size({"width": 390, "height": 844})
                 assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
                 page.screenshot(path=str(screenshots / "mobile.png"), full_page=True)
                 assert not errors, errors
                 browser.close()
-            print("Browser checks passed: project subpath, sample, clear, safe text and mobile layout")
+            print("Browser checks passed: airport selection, captured/reconstructed modes, configurable expansion, safe text, mobile layout")
         finally:
             server.shutdown()
 

@@ -1,0 +1,13 @@
+{
+  "airports": [
+    {"icao": "CYVR", "label": "Vancouver", "region": "British Columbia"},
+    {"icao": "CYHZ", "label": "Halifax", "region": "Nova Scotia"},
+    {"icao": "CYYJ", "label": "Victoria", "region": "British Columbia"},
+    {"icao": "CYXX", "label": "Abbotsford", "region": "British Columbia"}
+  ],
+  "historyDays": 90,
+  "observationHours": 24,
+  "requestDelaySeconds": 1,
+  "maxAirports": 40,
+  "defaultAirport": "CYVR"
+}

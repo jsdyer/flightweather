@@ -1,16 +1,42 @@
 {
-  "id": "coolcode-tool-template",
-  "title": "CoolCode Tool Starter",
-  "description": "A browser-only example that trims lines and removes exact duplicates.",
-  "category": "security",
-  "tags": ["text", "lines", "duplicates"],
-  "icon": "scan-search",
-  "url": "/coolcode-tool-template/",
-  "source": "https://github.com/jsdyer/coolcode-tool-template",
+  "id": "flightweather",
+  "title": "Flight Weather",
+  "description": "Keep airport forecasts and compare them with later observations.",
+  "category": "field-kit",
+  "tags": [
+    "aviation",
+    "METAR",
+    "TAF",
+    "weather",
+    "forecast",
+    "Vancouver",
+    "Halifax"
+  ],
+  "icon": "plane",
+  "url": "/flightweather/",
+  "source": "https://github.com/jsdyer/flightweather",
   "hosting": "project",
   "access": "browser",
   "data_info": {
-    "mode": "local",
-    "detail": "The browser reads the text you paste and compares its lines."
+    "mode": "snapshot",
+    "detail": "Retained NOAA/NWS airport forecasts and observations, with issue, validity and capture times.",
+    "cadence": "Hourly",
+    "probes": [
+      {
+        "label": "Data retrieved",
+        "url": "https://coolcode.ca/flightweather/data/ledger.json",
+        "path": [
+          "retrievedAt"
+        ],
+        "precision": "minute",
+        "count_at": {
+          "path": [
+            "observations"
+          ],
+          "measure": "length",
+          "unit": "reports"
+        }
+      }
+    ]
   }
 }

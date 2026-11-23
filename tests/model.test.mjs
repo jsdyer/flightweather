@@ -1,21 +1,14 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { cleanLines } from '../web/model.mjs';
-test('trims, removes blanks and preserves first-seen order', () => {
-  assert.deepEqual(cleanLines('  Halifax\nLangley\nHalifax\n\nVancouver  '), {
-    text: 'Halifax\nLangley\nVancouver', count: 3, removed: 1,
-  });
-});
-test('supports Windows and old Mac line endings', () => {
-  assert.equal(cleanLines('a\r\nb\ra').text, 'a\nb');
-});
-test('empty text and whitespace produce an empty result', () => {
-  assert.deepEqual(cleanLines(' \n\t'), { text: '', count: 0, removed: 0 });
-});
-test('preserves case and Unicode', () => {
-  assert.equal(cleanLines('Québec\nquébec\n東京\nQuébec').text, 'Québec\nquébec\n東京');
-});
-test('treats markup as ordinary text', () => {
-  assert.equal(cleanLines('<script>alert(1)</script>\n<script>alert(1)</script>').text, '<script>alert(1)</script>');
-});
-test('rejects non-text input', () => { assert.throws(() => cleanLines(null), TypeError); });
+import test from 'node:test';import assert from 'node:assert/strict';import {compare,groupsAt,ceiling,visibility,directionDifference,available,airportRecords,csv} from '../web/model.mjs';
+const epoch=Date.parse('2026-01-01T00:00:00Z')/1000;
+const f={icaoId:'CYVR',issueTime:epoch,firstCapturedAt:epoch+3600,validTimeFrom:epoch,validTimeTo:epoch+14400,fcsts:[{timeFrom:epoch,timeTo:epoch+14400,wspd:10,wdir:350,clouds:[{cover:'BKN',base:1000}]},{fcstChange:'TEMPO',timeFrom:epoch,timeTo:epoch+7200,wspd:25}]};
+const obs=t=>({icaoId:'CYVR',obsTime:epoch+t,wspd:12,wdir:10,clouds:[{cover:'OVC',base:500}]});
+test('first capture, issue and validity prevent hindsight leakage',()=>{assert.equal(compare(f,[obs(1800),obs(7200),obs(14400)]).length,1);assert.equal(compare(f,[obs(1800),obs(7200)],'reconstructed').length,2);assert.equal(compare({...f,issueTime:epoch+8000},[obs(7200)],'reconstructed').length,0);});
+test('conditional group never replaces prevailing forecast',()=>{const p=compare(f,[obs(5400)])[0];assert.equal(p.forecast.wspd,10);assert.equal(p.windDifference,2);assert.equal(p.conditional[0].fcstChange,'TEMPO');assert.equal(p.directionDifference,20);});
+test('BECMG suppresses pairings until a subsequent FM',()=>{const g={...f,fcsts:[...f.fcsts,{fcstChange:'BECMG',timeFrom:epoch+3600,timeTo:epoch+7200},{fcstChange:'FM',timeFrom:epoch+10800,timeTo:epoch+14400,wspd:20}]};assert.equal(groupsAt(g,epoch+6000).base,null);assert.equal(groupsAt(g,epoch+9000).base,null);assert.equal(groupsAt(g,epoch+12000).base.wspd,20);});
+test('missing and unbounded visibility are not exact numbers',()=>{assert.equal(visibility(null),null);assert.deepEqual(visibility('6+'),{value:6,bound:'greater'});assert.deepEqual(visibility(0),{value:0,bound:'exact'});assert.equal(visibility('unknown'),null);});
+test('ceiling distinguishes clear, vertical visibility and missing data',()=>{assert.equal(ceiling({clouds:[{cover:'SCT',base:2000}]}).value,null);assert.equal(ceiling({clouds:[]}).type,'unknown');assert.equal(ceiling({vertVis:200}).value,200);assert.equal(ceiling({clouds:[{cover:'BKN',base:2000},{cover:'OVC',base:800}]}).value,800);});
+test('variable and calm wind cannot create a direction error',()=>{assert.equal(directionDifference('VRB',90),null);assert.equal(compare(f,[{...obs(7200),wspd:0}])[0].directionDifference,null);});
+test('earlier captures exclude later reports and additions support new airports',()=>{const d={observations:[{...obs(7200),firstCapturedAt:epoch+8000},{...obs(7200),icaoId:'CYYZ',firstCapturedAt:epoch+9000}],forecasts:[f]};assert.equal(available(d,epoch+8500).observations.length,1);assert.equal(airportRecords(d,'CYYZ').observations.length,1);});
+test('CSV protects cells and quotes safely',()=>{assert.equal(csv([['=SUM(A1)','a"b',null]]),'"\'=SUM(A1)","a""b",""');});
+import {readFileSync} from 'node:fs';import {validateLedger} from '../web/model.mjs';
+test('real receipt validates and malformed forecast periods fail before rendering',()=>{const d=JSON.parse(readFileSync(new URL('../web/data/ledger.json',import.meta.url)));assert.equal(validateLedger(d),d);for(const change of [r=>r.forecasts[0].validTimeFrom=null,r=>r.forecasts[0].fcsts[0].timeTo='bad',r=>r.forecasts[0].firstCapturedAt='bad',r=>r.forecasts[0].id='',r=>r.captures[0].coverage='bad',r=>r.forecasts[0].fcsts[0].timeFrom=r.forecasts[0].fcsts[0].timeTo]){const x=structuredClone(d);change(x);assert.throws(()=>validateLedger(x));}});

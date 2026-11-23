@@ -1,116 +1,75 @@
-# CoolCode browser tool template
+# Flight Weather
 
-A starting point for independent tools at `coolcode.ca/<repo>/`: a working local-text
-example, responsive UI, Python standard-library build, Node tests, PR checks and Pages
-publication. No npm install is needed.
-
-## Using the example
+Keep airport forecasts on the record, then compare them with later METAR/SPECI observations. An independent static CoolCode tool using NOAA/NWS Aviation Weather Center reports. No account or API key required.
 
 <!-- coolcode:guide -->
-The first occurrence of each trimmed line keeps its place. Compare the output with the original text before copying the result.
+Choose an airport and a dated capture, then select a TAF edition. **Saved before observation** shows only outcomes that occurred after this tool had saved that forecast. A new collection can have no such outcomes yet; hourly captures grow the record. **Issued before observation (reconstructed)** can inspect earlier observations but is explicitly labelled retrospective. TEMPO and PROB alternatives stay separate, and BECMG transitions are excluded from deterministic pairing until the next FM period. Save receipt JSON to keep a portable copy.
 <!-- /coolcode:guide -->
 
-For a real tool, replace this paragraph with one or two plain-text sentences
-about an example, a limit or how to interpret the results. Keep the source,
-coverage, refresh behaviour and a worked example in this README as appropriate.
-When updating a tool, revise any details its behaviour has changed and keep the
-homepage's shorter data-source sentence in `tool.json` accurate.
-The hub imports the marked note into the catalogue README.
+## Use it
 
-## One-time template setup
+Open [Flight Weather](https://coolcode.ca/flightweather/). The initial collection covers Vancouver (CYVR), Halifax (CYHZ), Victoria (CYYJ) and Abbotsford (CYXX). Search by code/city and switch airport without another API request. The latest retained observation, original raw METAR/SPECI, forecast validity periods and original TAF are visible. Wind speed and numeric ceiling charts keep missing values as gaps. Exact observations and forecast values are also in the comparison table and CSV.
 
-Enable **Settings → General → Template repository** here. This repository does not
-need Pages enabled: its workflow builds/tests but intentionally skips deployment.
-New copies also skip deployment until `scripts/init.py` sets the tool ID to match
-their repository name. This lets you create the repo before configuring Pages.
+The first capture includes a 24-hour METAR/SPECI backfill and the current TAF for each airport. It does **not** pretend those forecasts were collected before the backfilled observations. Leave the hourly collector running and future observations become eligible for the default comparison. Reconstructed mode is useful for reading the forecast and observed reports together immediately, but is not a pre-captured forecast experiment.
 
-## Start a new tool
+This is a weather evidence explorer, not an operational aviation briefing or flight-planning service.
 
-1. Select **Use this template → Create a new repository**, choose owner `jsdyer`,
-   a unique lowercase name such as `my-tool`, and public visibility.
-2. Clone the new repository. Use Python 3.12+ and Node 24+.
-3. Set the identity, using a slug that matches the repository name:
+## Expand or customize
 
-```sh
-python3 scripts/init.py my-tool --title "My Tool" --description "Describe what this tool does."
+Edit [`web/config.json`](web/config.json). Add an airport to the `airports` array, for example:
+
+```json
+{"icao":"CYYZ","label":"Toronto","region":"Ontario"}
 ```
 
-Review the category, tags and icon in `tool.json`. `access: "browser"` tells the main
-catalogue that the tool works immediately without installation. `--owner` supports a different
-GitHub owner, but only projects owned by `jsdyer` inherit the CoolCode domain.
+Every airport requires a unique four-letter uppercase ICAO code and a label; `region` is optional. The UI provides an entry builder under **Add another airport**. Any reporting airport supported by AWC can be added; non-reporting codes or airports without TAFs show explicit gaps. Counts and selectors derive from the record, not four hard-coded defaults. Archived reports from a removed airport are retained until the rolling history expires.
 
-4. Replace the example in `web/` and its tests. Update the privacy explanation,
-   source attribution and README to describe the real tool.
-5. Test and preview:
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `airports` | Four Canadian airports | Airport watchlist; 1–40 airports per collection |
+| `defaultAirport` | `CYVR` | Initially selected airport, falling back to an available airport |
+| `observationHours` | `24` | METAR/SPECI lookback per collection; 1–48 hours |
+| `historyDays` | `90` | Rolling report/capture window; 2–365 days |
+| `requestDelaySeconds` | `1` | Pause after each source request; 1–30 seconds |
+| `maxAirports` | `40` | Can lower the safety limit; cannot raise it above 40 |
+
+A push changing the config, collector or refresh workflow starts **Flight Weather · Refresh reports**. You can also run it manually in GitHub Actions. Successful refreshes commit `web/data/ledger.json`, then **Flight Weather · Check and publish** tests and deploys the updated site. Ordinary UI/documentation pushes rebuild the existing snapshot without a fresh source fetch. To collect locally:
 
 ```sh
+python3 scripts/refresh.py
 node --test tests/*.test.mjs
 python3 -m unittest discover -s tests -v
 python3 scripts/build.py
-python3 -m http.server 8000 --directory dist
 ```
 
-Open `http://localhost:8000/`. The example trims lines, skips blanks and removes exact
-duplicates, preserving first-seen order and capitalization. It processes the text in tab memory. Update that explanation if your app behaves differently.
+The workflow schedule is `17 * * * *` (hourly, UTC). Edit `.github/workflows/refresh.yml` to change cadence. GitHub schedules can be delayed or disabled after inactivity; the UI flags collections over four hours old. A failed fetch or malformed response leaves the last ledger untouched, and a failed refresh does not trigger deployment. A valid empty response is recorded as a coverage gap. A collection returning no observations anywhere fails conservatively.
 
-CI also tests the browser flow and mobile layout at a project subpath. Replace the
-sample assertions in `tests/browser_smoke.py` when implementing your own UI. To run
-that check locally (optional for ordinary preview):
+The public file retains a rolling window; commits in Git preserve older file versions unless repository history is rewritten. Download receipt JSON for an independent copy. **Import receipt JSON** restores a supported collection in this tab only; reload to return to the published record. Current configuration does not invalidate earlier receipts.
 
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python3 -m pip install -r tests/browser-requirements.txt
-python3 -m playwright install --with-deps chromium
-python3 tests/browser_smoke.py
-```
+## Comparison method
 
-Playwright is a test-only dependency; the app and its static build do not use it.
+- Reports retain the provider's raw text and decoded fields. Observation time, TAF issue time, TAF validity periods and the tool's first/last capture times are separate.
+- A candidate observation must be in the selected TAF's validity interval and occur at or after issue time. Default mode additionally requires observation time **strictly after** first capture. Retrospective mode does not.
+- Prevailing BASE/FM groups apply at their encoded start-inclusive/end-exclusive intervals. The latest applicable BASE/FM group is selected. An observation inside an overlapping TEMPO/PROB period keeps that conditional context; the alternative is never substituted for the prevailing group.
+- BECMG timing is not deterministic. This implementation conservatively omits the prevailing comparison from the beginning of a BECMG group until a later FM group starts, including its aftermath. It does not silently treat the old forecast as still applicable.
+- These are descriptive per-report comparisons, not an overall accuracy grade. Different lead times, amended forecasts, conditional groups and unequal SPECI reporting frequency prevent a simple fair score.
+- Wind speed is in knots, direction in true degrees. Calm or variable direction has no angular error. Ceiling is the lowest BKN/OVC layer, or vertical visibility when explicitly reported, in feet above the aerodrome. A missing ceiling or only FEW/SCT is not converted to zero.
+- Visibility is in statute miles; the API's `6+` remains `>6`. Lower bounds are never treated as exact values for error scoring. Missing observations and decoded fields remain unavailable.
+- Distinct corrected raw/decoded reports retain separate IDs and first capture times. Receipt/ingestion flags do not create duplicates. A first capture does not assert the forecast was unchanged before the tool observed it.
 
-## Publish and register
+## Source and access
 
-When the actual tool is ready, in the **new tool repository** set **Settings → Pages → Build and deployment →
-Source → GitHub Actions**. Push to `main`, or manually run **Browser tool · Check and
-publish** after enabling Pages. If the initial deployment ran before Pages was enabled,
-enable it and rerun. PRs only check/build and provide a downloadable preview artifact.
+- [AWC Data API and usage restrictions](https://aviationweather.gov/data/api/)
+- [Current OpenAPI schema](https://aviationweather.gov/data/schema/openapi.yaml)
+- METAR: `/api/data/metar?ids=CYVR&format=json&hours=24`
+- TAF: `/api/data/taf?ids=CYVR&format=json` (there is no `hours` query parameter for TAF)
 
-Keep `{{VISIT_COUNTER}}` in the page head and `{{ISSUE_LINK}}` in the footer when replacing the starter UI. The build enables these for initialized CoolCode repositories. The shared counter records aggregate opens on coolcode.ca by public tool ID. Toolbox inputs and URL parameters are excluded. The issue link opens a reporting form with the tool already selected.
+AWC expressly does not permit browser cross-origin API access. GitHub's collector makes bounded server-side HTTPS requests with an identifying User-Agent, and the public page reads only its own saved files. One METAR and one TAF request per configured airport, with pauses, is well below the published 100-request/minute limit. Responses at the 400-record ceiling are rejected rather than silently represented as complete. No private proxy or API key is needed.
 
-Keep app-owned asset paths and module imports relative. Check `https://coolcode.ca/my-tool/`.
-Do not add a CNAME or set `coolcode.ca` as this project's custom domain; the account
-site supplies it. Only successful `main` builds deploy.
+NOAA/NWS remains the report source; this is an independent presentation, not an official NOAA service. Follow the source's current usage guidance. Original source requests and capture-level returned counts are retained in the receipt. Terms/guidance reviewed 2026-11-23.
 
-After verifying the app, copy the reviewed object from `tool.json` into `data/tools.json`
-in [the main site](https://github.com/jsdyer/jsdyer.github.io). Each tool still builds
-independently. Update the hub record when listing metadata changes; the hub is the
-authority for discovery. Ordinary app updates touch only this repository.
+## Privacy and hosting
 
-The main site separates **Use in your browser** from **Install yourself**. An app
-that asks for a file is still a browser tool. Standalone Linux packages should start
-in their own repositories with their own build/release workflow, rather than copying
-this browser-only scaffold. Their hub record uses `access: "install"`, links to an
-installation guide, and includes `requirements`.
+Airport search, comparison choices, configuration entry building and imported files remain in tab memory. No browser query is sent to AWC. Following an official report link opens that external service. The shared CoolCode counter records aggregate opens, not airport searches or imported reports. There is no persistent local storage and no frontend secret.
 
-## Files
-
-| Path | Purpose |
-| --- | --- |
-| `tool.json` | Page metadata and a ready-to-copy catalogue record |
-| `web/` | HTML, responsive CSS, DOM interactions and separate model logic |
-| `scripts/build.py` | Escape metadata and build `web/` into `dist/` |
-| `scripts/init.py` | Set a new project's identity |
-| `tests/` | Application and builder tests |
-| `.github/workflows/pages.yml` | Check PRs and publish successful main builds |
-| `AGENTS.md` | Instructions for future coding work |
-
-Namespace optional storage as `coolcode:<tool-id>:<key>`; CoolCode paths share a
-browser origin. Don't save pasted text/uploads by default. Document external APIs
-and send only the information needed for the selected action. Never embed secrets.
-
-Scheduled refresh is opt-in. Validate source data before deploying, display its date,
-and preserve the last good deployment on failure. Public-repository schedules can
-stop after 60 days without repository activity.
-
-Templates don't propagate future edits automatically. Adopt fixes explicitly and
-consider a versioned reusable workflow once several tools confirm the shared process.
-Choose and add the intended software license before distributing a new project.
+Source is in `web/`, collection in `scripts/refresh.py`, pure comparison logic in `web/model.mjs`. The offline build publishes only `dist/` to GitHub Pages at `/flightweather/`. Do not add a CNAME. Tests cover no-lookahead pairing, conditional and BECMG handling, missing values, import validation, expandable configuration and source/capture retention. Browser smoke tests in CI check the actual app at a project subpath and on mobile.
