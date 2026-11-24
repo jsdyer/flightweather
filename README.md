@@ -73,3 +73,11 @@ NOAA/NWS remains the report source; this is an independent presentation, not an 
 Airport search, comparison choices, configuration entry building and imported files remain in tab memory. No browser query is sent to AWC. Following an official report link opens that external service. The shared CoolCode counter records aggregate opens, not airport searches or imported reports. There is no persistent local storage and no frontend secret.
 
 Source is in `web/`, collection in `scripts/refresh.py`, pure comparison logic in `web/model.mjs`. The offline build publishes only `dist/` to GitHub Pages at `/flightweather/`. Do not add a CNAME. Tests cover no-lookahead pairing, conditional and BECMG handling, missing values, import validation, expandable configuration and source/capture retention. Browser smoke tests in CI check the actual app at a project subpath and on mobile.
+
+<!-- schedule-reliability -->
+## Schedule reliability
+
+Public GitHub repositories can have scheduled workflows disabled after 60 days of inactivity. A separate weekly [schedule guard](.github/workflows/schedule-guard.yml) calls GitHub's enable-workflow API for an explicit list of refresh workflows and itself. It can restore workflows disabled for inactivity, preserves manually disabled workflows, and runs independently of collection failures.
+
+This is an interim mitigation, not a scheduling guarantee: GitHub does not document active-workflow renewal as a permanent exemption, and scheduled runs can be delayed or dropped. A scheduler on our own Linux server is the planned independent trigger. The guard does not collect data, create dummy commits, or change source/check timestamps; successful collection and published data freshness still need monitoring.
+<!-- /schedule-reliability -->
