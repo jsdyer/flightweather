@@ -62,6 +62,17 @@ def main():
                 assert '"icao": "CYYZ"' in page.locator("#config-entry").inner_text()
                 page.screenshot(path=str(screenshots / "desktop.png"), full_page=True)
                 page.set_viewport_size({"width": 390, "height": 844})
+                page.reload()
+                expect(page.locator("#airport-name")).to_have_text(default["label"])
+                first_airport = page.locator(".airport-button").first.bounding_box()
+                assert first_airport["y"] + first_airport["height"] < 844
+                expect(page.locator(".notice")).to_contain_text("official aviation briefings")
+                page.get_by_role("button", name=alternative["label"] + " ", exact=False).click()
+                expect(page.locator("#airport-name")).to_have_text(alternative["label"])
+                expect(page.locator("#airport-name")).to_be_focused()
+                assert 0 <= page.locator("#airport-name").bounding_box()["y"] < 120
+                page.get_by_role("link", name="Choose another airport").click()
+                page.evaluate("window.scrollTo(0, 0)")
                 assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
                 page.screenshot(path=str(screenshots / "mobile.png"), full_page=True)
                 assert not errors, errors
