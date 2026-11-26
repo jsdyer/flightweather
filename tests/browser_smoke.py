@@ -35,7 +35,10 @@ def main():
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.goto(f"http://127.0.0.1:{server.server_port}/example-tool/")
                 expect(page.locator("#airport-name")).to_have_text(default["label"])
+                coverage = page.get_by_text("Airport coverage and capture time", exact=True)
+                coverage.click()
                 assert int(page.locator("#airport-count").inner_text()) == len(data["airports"])
+                coverage.click()
                 assert page.locator("#airport-name").inner_text() == default["label"]
                 page.get_by_text("Read latest raw observation", exact=True).click()
                 expect(page.locator("#raw-observation")).to_be_visible()
@@ -62,12 +65,14 @@ def main():
                 assert '"icao": "CYYZ"' in page.locator("#config-entry").inner_text()
                 page.screenshot(path=str(screenshots / "desktop.png"), full_page=True)
                 page.set_viewport_size({"width": 390, "height": 844})
-                page.reload()
+                tool_url = page.url
+                page.goto("about:blank")
+                page.goto(tool_url)
                 expect(page.locator("#airport-name")).to_have_text(default["label"])
                 first_airport = page.locator(".airport-button").first.bounding_box()
-                assert first_airport["y"] + first_airport["height"] < 844
+                assert first_airport["y"] >= 0 and first_airport["y"] + first_airport["height"] < 844
                 expect(page.locator(".notice")).to_contain_text("official aviation briefings")
-                page.get_by_role("button", name=alternative["label"] + " ", exact=False).click()
+                page.locator(".airport-button").filter(has_text=alternative["icao"]).click()
                 expect(page.locator("#airport-name")).to_have_text(alternative["label"])
                 expect(page.locator("#airport-name")).to_be_focused()
                 assert 0 <= page.locator("#airport-name").bounding_box()["y"] < 120
