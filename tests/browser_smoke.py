@@ -75,9 +75,12 @@ def main():
                 page.locator(".airport-button").filter(has_text=alternative["icao"]).click()
                 expect(page.locator("#airport-name")).to_have_text(alternative["label"])
                 expect(page.locator("#airport-name")).to_be_focused()
-                assert 0 <= page.locator("#airport-name").bounding_box()["y"] < 120
+                page.wait_for_function("""() => {
+                    const top = document.querySelector('#airport-name').getBoundingClientRect().top;
+                    return top >= 0 && top < 120;
+                }""")
                 page.get_by_role("link", name="Choose another airport").click()
-                page.evaluate("window.scrollTo(0, 0)")
+                page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
                 assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
                 page.screenshot(path=str(screenshots / "mobile.png"), full_page=True)
                 assert not errors, errors

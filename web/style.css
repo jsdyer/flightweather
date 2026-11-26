@@ -14,3 +14,4 @@
 .report-links { font-size: .9rem; }
 #airport-name, #airport-picker, #capture { scroll-margin-top: 1rem; }
 #airport-name:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
